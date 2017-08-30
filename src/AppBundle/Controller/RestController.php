@@ -153,17 +153,46 @@ final class RestController extends Controller
         } else {
             $items = call_user_func_array(array($rcr, 'fetchFiltered'), $fields);
 
+            $restHelper = $this->container->get('rest.helper');
             if (!empty($items)) {
                 foreach ($items as $item) {
-                    $this->lastItems[] = array(
-                      'id' => $item->getId(),
-                      'nid' => $item->getNid(),
-                      'agency' => $item->getAgency(),
-                      'type' => $item->getType(),
-                      'fields' => $item->getFields(),
+                    $itemFields = $item->getFields();
+                    // Attempt to parse fields that contain dates.
+                    // Since the field value can be pushed without any
+                    // validation, the values might be way different from
+                    // what is expected.
+                    // Therefore make sure that this part doesn't fail on
+                    // weird input.
+                    try {
+                        if (!empty($itemFields['field_ding_event_date']['value']['from'])) {
+                            $itemFields['field_ding_event_date']['value']['from'] = $restHelper->adjustDate($itemFields['field_ding_event_date']['value']['from']);
+                        }
+
+                        if (!empty($itemFields['field_ding_event_date']['value']['to'])) {
+                            $itemFields['field_ding_event_date']['value']['to'] = $restHelper->adjustDate($itemFields['field_ding_event_date']['value']['to']);
+                        }
+
+                        if (!empty($itemFields['created']['value'])) {
+                            $itemFields['created']['value'] = $restHelper->adjustDate($itemFields['created']['value']);
+                        }
+
+                        if (!empty($itemFields['changed']['value'])) {
+                            $itemFields['changed']['value'] = $restHelper->adjustDate($itemFields['changed']['value']);
+                        }
+                    }
+                    catch (RestException $e) {
+                        // Do nothing.
+                    }
+
+                    $this->lastItems[] = [
+                      'id'       => $item->getId(),
+                      'nid'      => $item->getNid(),
+                      'agency'   => $item->getAgency(),
+                      'type'     => $item->getType(),
+                      'fields'   => $itemFields,
                       'taxonomy' => $item->getTaxonomy(),
-                      'list' => $item->getList(),
-                    );
+                      'list'     => $item->getList(),
+                    ];
                 }
 
                 $this->lastStatus = true;
