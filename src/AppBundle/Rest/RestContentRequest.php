@@ -229,7 +229,7 @@ class RestContentRequest extends RestBaseRequest
 
                 $fs->dumpFile($path, base64_decode($file_contents));
                 if ($fs->exists($path)) {
-                  $field_value['value'][$k] = 'files/' . $this->agencyId . '/' . $filename;
+                  $field_value['value'][$k] = 'files/' . $this->agencyId . '/original/' . $filename;
                 }
               }
             }
