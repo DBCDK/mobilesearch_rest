@@ -9,7 +9,6 @@ use AppBundle\Exception\RestException;
 use Doctrine\Bundle\MongoDBBundle\ManagerRegistry as MongoEM;
 use Symfony\Component\Filesystem\Filesystem as FSys;
 
-use AppBundle\Rest\RestBaseRequest;
 use AppBundle\Document\Content as FSContent;
 
 class RestContentRequest extends RestBaseRequest

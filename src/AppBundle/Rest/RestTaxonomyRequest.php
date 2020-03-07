@@ -6,11 +6,9 @@
 namespace AppBundle\Rest;
 
 use Doctrine\Bundle\MongoDBBundle\ManagerRegistry as MongoEM;
-use AppBundle\Rest\RestBaseRequest;
 
 class RestTaxonomyRequest extends RestBaseRequest
 {
-
     public function __construct(MongoEM $em)
     {
         parent::__construct($em);
@@ -45,11 +43,6 @@ class RestTaxonomyRequest extends RestBaseRequest
             foreach ($node->getTaxonomy() as $vocabularyName => $vocabulary) {
                 if (!empty($vocabulary['terms']) && is_array($vocabulary['terms'])) {
                     $vocabularies[$vocabularyName] = $vocabulary['name'];
-//                     foreach ($vocabulary['terms'] as $term) {
-//                         $vocabularies[$vocabularyName]['terms'][] = $term;
-//                     }
-
-//                     $vocabularies[$vocabularyName]['terms'] = array_values(array_unique($vocabularies[$vocabularyName]['terms']));
                 }
             }
         }
@@ -60,24 +53,58 @@ class RestTaxonomyRequest extends RestBaseRequest
     public function fetchTermSuggestions($agency, $vocabulary, $contentType, $query)
     {
         $field = 'taxonomy.' . $vocabulary . '.terms';
-        $pattern = '/' . $query . '/i';
 
-        $result = $this->em->getRepository('AppBundle:Content')->findBy(array(
-            'agency' => $agency,
-            'type' => $contentType,
-            $field => array('$in' => array(new \MongoRegex($pattern)))
-        ));
+        $result = $this->em
+          ->getManager()
+          ->createQueryBuilder('AppBundle:Content')
+          ->field('agency')->equals($agency)
+          ->field('type')->equals($contentType)
+          ->where('function() {
+            var iterator = function(data, value) {
+              var regex = new RegExp(value, "ig");
+
+              for (var field in data) {
+                if (field.match(regex)) {
+                  return true;
+                }
+
+                if (typeof data[field] === "object") {
+                  var found = false;
+                  found = iterator(data[field], value);
+                  if (found) {
+                    return true;
+                  }
+                }
+              }
+
+              return false;
+            }
+
+            return iterator(this.'.$field.' || [], "'.$query.'");
+          }')
+          ->getQuery()->execute();
 
         $terms = array();
+        // Recursive worker to find nested values.
+        $worker = function(array $data, $value) use(&$worker, &$terms) {
+          foreach ($data as $term => $children) {
+            $pattern = '/' . $value . '/i';
+            if (preg_match($pattern, $term)) {
+              $terms[] = $term;
+            }
+
+            if (!empty($children)) {
+              $worker($children, $value);
+            }
+          }
+
+          return $terms;
+        };
+
         foreach ($result as $content) {
             $taxonomy = $content->getTaxonomy();
             if (isset($taxonomy[$vocabulary]) && is_array($taxonomy[$vocabulary]['terms'])) {
-                foreach ($taxonomy[$vocabulary]['terms'] as $term) {
-                    $pattern = '/' . $query . '/i';
-                    if (preg_match($pattern, $term)) {
-                        $terms[] = $term;
-                    }
-                }
+              $terms += $worker($taxonomy[$vocabulary]['terms'], $query);
             }
         }
 
